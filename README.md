@@ -23,7 +23,8 @@ It uses **Go, Kafka, Redis, and Docker** to build a local event-driven pipeline 
 - **Kafka** — event streaming backbone  
 - **Redis (ReJSON)** — fast in-memory store for snapshots and logs  
 - **Docker** — containerized environment  
-- **Tauri (planned)** — lightweight desktop GUI for stats & queries  
+- **Tauri (planned)** — lightweight desktop GUI for stats & queries
+- **ClickHouse** — for historical data and quick queries
 
 ---
 
