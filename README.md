@@ -1,7 +1,6 @@
 # CSYou — Real-Time CS2 Analytics (🚧 In Progress)
 
 CSYou is a self-hosted analytics platform for Counter-Strike 2 that captures **live game telemetry** via CS2 Game State Integration (GSI).  
-It uses **Go, Kafka, Redis, and Docker** to build a local event-driven pipeline that powers a real-time GUI dashboard.  
 
 > ⚠️ This project is still **in progress**. Core event collection is working, but the GUI and advanced querying are under development.
 
@@ -23,7 +22,7 @@ It uses **Go, Kafka, Redis, and Docker** to build a local event-driven pipeline 
 - **Kafka** — event streaming backbone  
 - **Redis (ReJSON)** — fast in-memory store for snapshots and logs  
 - **Docker** — containerized environment  
-- **Tauri (planned)** — lightweight desktop GUI for stats & queries
+- **Tauri** — lightweight desktop GUI for stats & queries
 - **ClickHouse** — for historical data and quick queries
 
 ---
