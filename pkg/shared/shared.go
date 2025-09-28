@@ -1,9 +1,21 @@
 package shared
 
+import (
+	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/events"
+	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/structs"
+)
+
 // Variables for current match information.
 var CurrentMatchID string
 var LastMap string
 var LastRound int
+
+// Wrapper for Kafka event handling
+type EventWrapper struct {
+	GSIEvent    *structs.GSIEvent        `json:"gsi_event"`
+	GameDetails *events.GameEventDetails `json:"game_details"`
+	Timestamp   int64                    `json:"timestamp"`
+}
 
 type RedisPlayerEvent struct {
 	MatchID string `json:"match_id"` // UUID you generate

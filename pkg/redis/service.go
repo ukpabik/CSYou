@@ -56,7 +56,7 @@ func HandlePlayerEvent(event *structs.GSIEvent, gameDetails *events.GameEventDet
 		return
 	}
 	ctx := context.Background()
-	if event.CSMap.Name != shared.LastMap || event.CSMap.Round == 1 && shared.LastRound > 1 {
+	if event.CSMap.Name != shared.LastMap || ((event.CSMap.Round == 0 || event.CSMap.Round == 1) && shared.LastRound >= 1) {
 		shared.CurrentMatchID = uuid.New().String()
 		shared.LastMap = event.CSMap.Name
 		log.Printf("New match started: %s on map %s", shared.CurrentMatchID, shared.LastMap)
