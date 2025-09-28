@@ -55,9 +55,15 @@ func main() {
 	go kafka_io.ReadKillEventLoop()
 
 	// Listen for events from CS2 GSI
-	gsi.InitializeEventHandlers()
-	gsi.Listen()
+	go func() {
+		gsi.InitializeEventHandlers()
+		gsi.Listen()
+	}()
 
-	// Initialize API server
-	http.ListenAndServe(shared.API_PORT, api.InitializeAPIServer(shared.ADDRESS, shared.API_PORT))
+	addr := fmt.Sprintf("%s:%s", shared.ADDRESS, shared.API_PORT)
+	log.Printf("API server listening on %s", addr)
+
+	if err := http.ListenAndServe(addr, api.InitializeAPIServer(shared.ADDRESS, shared.API_PORT)); err != nil {
+		log.Fatalf("failed to start API server: %v", err)
+	}
 }

@@ -41,9 +41,7 @@ func InitializeEventHandlers() {
 		}
 
 		// Send log to frontend
-		if err := api.LogSender(*eventLog, shared.ADDRESS, shared.FRONTEND_PORT); err != nil {
-			fmt.Printf("failed to send log to frontend: %v", err)
-		}
+		api.PushLog(*eventLog)
 
 		if gsiEvent.CSMap.Name != shared.LastMap ||
 			(gsiEvent.CSMap.Round == 1 && shared.LastRound >= 1) {
@@ -71,9 +69,7 @@ func InitializeEventHandlers() {
 			}
 
 			// Send log to frontend
-			if err := api.LogSender(*killEventLog, shared.ADDRESS, shared.FRONTEND_PORT); err != nil {
-				fmt.Printf("failed to send log to frontend: %v", err)
-			}
+			api.PushLog(*killEventLog)
 			if err := kafka_io.WriteKillEvent(ke, gsiEvent.Player.Steamid); err != nil {
 				log.Printf("failed to write kill event to kafka: %v", err)
 			}
