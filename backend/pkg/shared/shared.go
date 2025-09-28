@@ -9,6 +9,7 @@ import (
 var CurrentMatchID string
 var LastMap string
 var LastRound int
+var PlayerID string
 
 const (
 	REDIS_PORT      = 6379

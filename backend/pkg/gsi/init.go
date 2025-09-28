@@ -27,6 +27,10 @@ func InitializeEventHandlers() {
 			gsiEvent.GetOriginalRequestFlat(),
 		)
 
+		if shared.PlayerID == "" {
+			shared.PlayerID = gsiEvent.Player.Steamid
+		}
+
 		if gsiEvent.Round == nil || gsiEvent.Player == nil {
 			return
 		}

@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -41,7 +42,7 @@ func storePlayerEvent(ctx context.Context, event *shared.RedisPlayerEvent) error
 		return fmt.Errorf("nil player event")
 	}
 
-	key := fmt.Sprintf("matches:%s:round:%d:player:%s",
+	key := fmt.Sprintf("matches:%s:round:%d:player:%s:events",
 		event.MatchID, event.Round, event.SteamID)
 
 	_, err := RedisClient.JSONSet(ctx, key, ".", event).Result()
@@ -65,4 +66,38 @@ func storeKillEvent(ctx context.Context, event *shared.RedisKillEvent) error {
 		return fmt.Errorf("unable to add kill event to Redis: %v", err)
 	}
 	return nil
+}
+
+func GetAllPlayerEvents(ctx context.Context) ([]RedisPlayerEvent, error) {
+	events, err := RedisClient.JSONGet(ctx, fmt.Sprintf("matches:*:round:*:player:%s:events", shared.PlayerID)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if events == "" {
+		return []RedisPlayerEvent{}, nil
+	}
+
+	var playerEvents []RedisPlayerEvent
+	if err := json.Unmarshal([]byte(events), &playerEvents); err != nil {
+		return nil, err
+	}
+	return playerEvents, nil
+}
+
+func GetAllKillEvents(ctx context.Context) ([]RedisKillEvent, error) {
+	events, err := RedisClient.JSONGet(ctx, fmt.Sprintf("matches:*:round:*:player:%s:kills", shared.PlayerID)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if events == "" {
+		return []RedisKillEvent{}, nil
+	}
+
+	var killEvents []RedisKillEvent
+	if err := json.Unmarshal([]byte(events), &killEvents); err != nil {
+		return nil, err
+	}
+	return killEvents, nil
 }
