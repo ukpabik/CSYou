@@ -57,7 +57,7 @@ Paste the following configuration into the file:
 {
     "uri" "[http://127.0.0.1:3000](http://127.0.0.1:3000)"
     "timeout" "5.0"
-    "heartbeat" "0.25"
+    "heartbeat" "0.5"
 
     "auth"
     {
