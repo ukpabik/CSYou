@@ -26,9 +26,8 @@ The platform works by listening for HTTP POST requests sent directly from the CS
 2.  **Go Collector**: A lightweight Go service listens on this endpoint (`http://127.0.0.1:3000`), validates the incoming data, and publishes it as a raw event to a Kafka topic.
 3.  **Kafka**: Acts as a durable and scalable message bus, decoupling the data ingestion from processing.
 4.  **Redis**: A fast in-memory store that holds the latest game state, allowing the GUI to display live data with minimal latency.
-5.  **Tauri GUI**: The frontend application reads directly from Redis to provide a real-time view of your current match statistics.
-
-*(In the future, a separate processor service will consume events from Kafka, enrich them, and store them in ClickHouse for historical analysis and long-term storage.)*
+5.  **ClickHouse**: A speedy database built for instant columnar queries to quickly get historical game data.
+6.  **Tauri GUI**: The frontend application reads directly from Redis to provide a real-time view of your current match statistics.
 
 ---
 
