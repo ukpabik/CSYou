@@ -9,6 +9,8 @@ import (
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/events"
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/structs"
 	"github.com/google/uuid"
+	"github.com/ukpabik/CSYou/pkg/api"
+	"github.com/ukpabik/CSYou/pkg/api/model"
 	"github.com/ukpabik/CSYou/pkg/kafka_io"
 	"github.com/ukpabik/CSYou/pkg/player_events"
 	"github.com/ukpabik/CSYou/pkg/shared"
@@ -29,6 +31,16 @@ func InitializeEventHandlers() {
 			return
 		}
 
+		eventLog := &model.Log{
+			EventType: events.EnumToEventName[gameEvent.EventType],
+			Time:      time.Now().Format("2006-01-02 15:04:05.000"),
+		}
+
+		// Send log to frontend
+		if err := api.LogSender(*eventLog, shared.ADDRESS, shared.FRONTEND_PORT); err != nil {
+			fmt.Printf("failed to send log to frontend: %v", err)
+		}
+
 		if gsiEvent.CSMap.Name != shared.LastMap ||
 			(gsiEvent.CSMap.Round == 1 && shared.LastRound >= 1) {
 			shared.CurrentMatchID = uuid.New().String()
@@ -47,6 +59,16 @@ func InitializeEventHandlers() {
 		for _, ke := range killEvents {
 			if ke.ActiveGun.Type == "C4" {
 				continue
+			}
+
+			killEventLog := &model.Log{
+				EventType: "Player Kill",
+				Time:      time.Now().Format("2006-01-02 15:04:05.000"),
+			}
+
+			// Send log to frontend
+			if err := api.LogSender(*killEventLog, shared.ADDRESS, shared.FRONTEND_PORT); err != nil {
+				fmt.Printf("failed to send log to frontend: %v", err)
 			}
 			if err := kafka_io.WriteKillEvent(ke, gsiEvent.Player.Steamid); err != nil {
 				log.Printf("failed to write kill event to kafka: %v", err)

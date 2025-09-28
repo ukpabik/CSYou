@@ -14,6 +14,9 @@ const (
 	REDIS_PORT      = 6379
 	CLICKHOUSE_PORT = 9000
 	KAFKA_PORT      = 9092
+	API_PORT        = "8080"
+	FRONTEND_PORT   = 1420
+	ADDRESS         = "localhost"
 )
 
 // Wrapper for Kafka event handling
