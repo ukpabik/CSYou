@@ -30,7 +30,7 @@ func InitializeEventHandlers() {
 		}
 
 		if gsiEvent.CSMap.Name != shared.LastMap ||
-			((gsiEvent.CSMap.Round == 0 || gsiEvent.CSMap.Round == 1) && shared.LastRound >= 1) {
+			(gsiEvent.CSMap.Round == 1 && shared.LastRound >= 1) {
 			shared.CurrentMatchID = uuid.New().String()
 			shared.LastMap = gsiEvent.CSMap.Name
 			log.Printf("New match started: %s on map %s", shared.CurrentMatchID, shared.LastMap)
@@ -45,6 +45,9 @@ func InitializeEventHandlers() {
 
 		killEvents := player_events.DetectKillEvents(shared.CurrentMatchID, gsiEvent)
 		for _, ke := range killEvents {
+			if ke.ActiveGun.Type == "C4" {
+				continue
+			}
 			if err := kafka_io.WriteKillEvent(ke, gsiEvent.Player.Steamid); err != nil {
 				log.Printf("failed to write kill event to kafka: %v", err)
 			}

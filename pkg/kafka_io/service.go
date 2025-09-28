@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/segmentio/kafka-go"
+	"github.com/ukpabik/CSYou/pkg/db"
 	"github.com/ukpabik/CSYou/pkg/redis"
 	"github.com/ukpabik/CSYou/pkg/shared"
 )
@@ -59,7 +60,10 @@ func ReadPlayerEventLoop() {
 		}
 		redis.HandlePlayerEvent(&playerEvent)
 
-		// TODO: Process event into Clickhouse
+		if err := db.InsertPlayerEvent(&playerEvent); err != nil {
+			log.Printf("unable to insert player event into clickhouse: %v", err)
+		}
+
 		log.Printf("Processing player event for match %s, player %s", playerEvent.MatchID, playerEvent.SteamID)
 	}
 	log.Println("Kafka player event consumer loop ended")
@@ -85,7 +89,10 @@ func ReadKillEventLoop() {
 
 		redis.HandleKillEvent(&killEvent)
 
-		// TODO: Process event into clickhouse
+		if err := db.InsertKillEvent(&killEvent); err != nil {
+			log.Printf("unable to insert player event into clickhouse: %v", err)
+		}
+
 		log.Printf("Processing kill event for match %s, player %s with %s", killEvent.MatchID, killEvent.SteamID, killEvent.ActiveGun.Name)
 	}
 	log.Println("Kafka kill event consumer loop ended")

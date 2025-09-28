@@ -3,15 +3,11 @@ package kafka_io
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/segmentio/kafka-go"
 )
 
 const (
-	KAFKA_PORT         = 9092
 	PLAYER_EVENT_TOPIC = "player_events"
 	KILL_EVENT_TOPIC   = "kill_events"
 )
@@ -23,29 +19,31 @@ var (
 	KillEventReader   *kafka.Reader
 )
 
-func InitializeReaderAndWriter() {
+func InitializeReaderAndWriter(addr string, port int) {
+
+	location := fmt.Sprintf("%s:%d", addr, port)
 	// Writers
 	PlayerEventWriter = &kafka.Writer{
-		Addr:     kafka.TCP(fmt.Sprintf("localhost:%d", KAFKA_PORT)),
+		Addr:     kafka.TCP(location),
 		Topic:    PLAYER_EVENT_TOPIC,
 		Balancer: &kafka.LeastBytes{},
 	}
 
 	KillEventWriter = &kafka.Writer{
-		Addr:     kafka.TCP(fmt.Sprintf("localhost:%d", KAFKA_PORT)),
+		Addr:     kafka.TCP(location),
 		Topic:    KILL_EVENT_TOPIC,
 		Balancer: &kafka.LeastBytes{},
 	}
 
 	// Readers
 	PlayerEventReader = kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"localhost:9092"},
+		Brokers: []string{location},
 		Topic:   PLAYER_EVENT_TOPIC,
 		GroupID: "cs2-player-processor",
 	})
 
 	KillEventReader = kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"localhost:9092"},
+		Brokers: []string{location},
 		Topic:   KILL_EVENT_TOPIC,
 		GroupID: "cs2-kill-processor",
 	})
@@ -69,16 +67,4 @@ func CloseReaderAndWriters() {
 			}
 		}
 	}
-}
-
-func SetupGracefulShutdown() {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigs
-		log.Println("shutting down Kafka clients...")
-		CloseReaderAndWriters()
-		os.Exit(0)
-	}()
 }

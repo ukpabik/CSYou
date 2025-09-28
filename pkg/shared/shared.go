@@ -10,6 +10,12 @@ var CurrentMatchID string
 var LastMap string
 var LastRound int
 
+const (
+	REDIS_PORT      = 6379
+	CLICKHOUSE_PORT = 9000
+	KAFKA_PORT      = 9092
+)
+
 // Wrapper for Kafka event handling
 type EventWrapper struct {
 	GSIEvent    *structs.GSIEvent        `json:"gsi_event"`
