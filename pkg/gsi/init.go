@@ -1,7 +1,6 @@
 package gsi
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -9,7 +8,9 @@ import (
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi"
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/events"
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi/structs"
+	"github.com/google/uuid"
 	"github.com/ukpabik/CSYou/pkg/kafka_io"
+	"github.com/ukpabik/CSYou/pkg/player_events"
 	"github.com/ukpabik/CSYou/pkg/shared"
 )
 
@@ -28,24 +29,29 @@ func InitializeEventHandlers() {
 			return
 		}
 
-		// Create a wrapper with both GSI event and game event details
-		eventWrapper := &shared.EventWrapper{
-			GSIEvent:    gsiEvent,
-			GameDetails: &gameEvent,
-			Timestamp:   time.Now().Unix(),
+		if gsiEvent.CSMap.Name != shared.LastMap ||
+			((gsiEvent.CSMap.Round == 0 || gsiEvent.CSMap.Round == 1) && shared.LastRound >= 1) {
+			shared.CurrentMatchID = uuid.New().String()
+			shared.LastMap = gsiEvent.CSMap.Name
+			log.Printf("New match started: %s on map %s", shared.CurrentMatchID, shared.LastMap)
 		}
 
-		convertedEvent, err := json.Marshal(eventWrapper)
-		if err != nil {
-			log.Println("unable to marshal event")
-			return
+		playerEvent := shared.BundlePlayerEvent(gsiEvent, &gameEvent)
+
+		// Publish player event to Kafka
+		if err := kafka_io.WritePlayerEvent(playerEvent, gsiEvent.Player.Steamid); err != nil {
+			log.Printf("failed to write player event to kafka: %v", err)
 		}
 
-		// Write to Kafka with player steamid as key for partitioning
-		key := gsiEvent.Player.Steamid
-		if err := kafka_io.WriteEvent(convertedEvent, key); err != nil {
-			log.Printf("failed to write event to kafka: %v", err)
+		killEvents := player_events.DetectKillEvents(shared.CurrentMatchID, gsiEvent)
+		for _, ke := range killEvents {
+			if err := kafka_io.WriteKillEvent(ke, gsiEvent.Player.Steamid); err != nil {
+				log.Printf("failed to write kill event to kafka: %v", err)
+			}
 		}
+
+		// Track last round
+		shared.LastRound = gsiEvent.CSMap.Round
 	})
 
 	cs2gsi.RegisterNonEventHandler(func(gsiEvent *structs.GSIEvent) {

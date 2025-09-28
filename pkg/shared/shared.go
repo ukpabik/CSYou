@@ -71,3 +71,42 @@ type ActiveGun struct {
 	Skin     string `json:"skin"`     // paintkit / skin
 	Headshot bool   `json:"headshot"` // true if the kill was HS
 }
+
+// BundleEvent maps an event to Redis JSON structure.
+func BundlePlayerEvent(event *structs.GSIEvent, _ *events.GameEventDetails) *RedisPlayerEvent {
+
+	redisEvent := &RedisPlayerEvent{
+		// Match Information
+		MatchID: CurrentMatchID,
+		Round:   event.CSMap.Round,
+		Map:     event.CSMap.Name,
+		Team:    event.Player.Team,
+		SteamID: event.Player.Steamid,
+		Name:    event.Player.Name,
+		Mode:    event.CSMap.Mode,
+
+		// Player State
+		Health:     *event.Player.State.Health,
+		Armor:      *event.Player.State.Armor,
+		Helmet:     event.Player.State.Helmet,
+		Money:      event.Player.State.Money,
+		EquipValue: event.Player.State.EquipValue,
+
+		// Per-round stats
+		RoundKills:  event.Player.State.RoundKills,
+		RoundKillHS: event.Player.State.RoundKillHS,
+
+		// Match stats
+		Kills:   event.Player.MatchStats.Kills,
+		Assists: event.Player.MatchStats.Assists,
+		Deaths:  event.Player.MatchStats.Deaths,
+		MVPs:    event.Player.MatchStats.Mvps,
+		Score:   event.Player.MatchStats.Score,
+
+		// Match Context
+		EventTS: int64(event.Provider.Timestamp),
+		WinTeam: event.Round.WinTeam,
+	}
+
+	return redisEvent
+}

@@ -29,13 +29,13 @@ services:
       - "6379:6379"
       - "8001:8001" # redis insight (GUI)
 
-  # clickhouse:
-  #   image: clickhouse/clickhouse-server:23.12
-  #   container_name: clickhouse
-  #   ports:
-  #     - "8123:8123" # HTTP interface
-  #     - "9000:9000" # native TCP
-  #   environment:
-  #     - CLICKHOUSE_DB=cs2
-  #     - CLICKHOUSE_USER=default
-  #     - CLICKHOUSE_PASSWORD=
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.12
+    container_name: clickhouse
+    ports:
+      - "8123:8123" # HTTP interface
+      - "9000:9000" # native TCP
+    environment:
+      - CLICKHOUSE_DB=cs2
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=

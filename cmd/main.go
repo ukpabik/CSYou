@@ -19,7 +19,8 @@ func main() {
 	kafka_io.InitializeReaderAndWriter()
 	kafka_io.SetupGracefulShutdown()
 	// Run kafka reading in a goroutine
-	go kafka_io.ReadEventLoop()
+	go kafka_io.ReadPlayerEventLoop()
+	go kafka_io.ReadKillEventLoop()
 
 	// Listen for events from CS2 GSI
 	gsi.InitializeEventHandlers()
