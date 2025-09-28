@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Database, Zap, Terminal, Target } from "lucide-react"
 import { AnalyticsCharts } from "@/components/analytics-charts"
 import { LiveTerminal } from "@/components/live-terminal"
-import { SearchFilters } from "@/components/search-filters"
 import { CacheManager } from "@/components/cache-manager"
 import "./App.css"
 
@@ -51,17 +50,16 @@ export default function CSGOAnalytics() {
             <TabsList className="grid w-full max-w-md grid-cols-2">
               <TabsTrigger value="redis" className="gap-2">
                 <Zap className="h-4 w-4" />
-                Redis Data
+                Recent Data
               </TabsTrigger>
               <TabsTrigger value="clickhouse" className="gap-2">
                 <Database className="h-4 w-4" />
-                ClickHouse
+                Historical Data
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="redis" className="space-y-6">
-              <div className="grid gap-6">
-                <SearchFilters />
+              <div className="grid gap-6"> 
                 <AnalyticsCharts dataSource="redis" />
               </div>
             </TabsContent>
@@ -71,13 +69,13 @@ export default function CSGOAnalytics() {
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Database className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">ClickHouse Integration</h3>
+                    <h3 className="text-lg font-semibold mb-2">Historical Data</h3>
                     <p className="text-muted-foreground text-center max-w-md">
-                      ClickHouse data source will be available soon. Configure your connection to start analyzing
+                      Historical data source will be available soon. Configure your connection to start analyzing
                       historical match data.
                     </p>
                     <Button className="mt-4" disabled>
-                      Configure ClickHouse
+                      Configure Historical Data
                     </Button>
                   </CardContent>
                 </Card>

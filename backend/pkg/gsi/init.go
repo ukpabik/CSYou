@@ -17,21 +17,17 @@ import (
 )
 
 const GSI_PORT = 3000
+const STEAM_ID = "76561198107182787" // Replace with your actual SteamID (switch to cfg later?)
 
 // InitializeEventHandlers initializes all event handlers for every captured event.
 func InitializeEventHandlers() {
 	cs2gsi.RegisterGlobalHandler(func(gsiEvent *structs.GSIEvent, gameEvent events.GameEventDetails) {
-		fmt.Printf("(%v) %v %v\n",
-			time.Now().Format("2006-01-02 15:04:05.000"),
-			events.EnumToEventName[gameEvent.EventType],
-			gsiEvent.GetOriginalRequestFlat(),
-		)
 
 		if shared.PlayerID == "" {
-			shared.PlayerID = gsiEvent.Player.Steamid
+			shared.PlayerID = STEAM_ID
 		}
 
-		if gsiEvent.Round == nil || gsiEvent.Player == nil {
+		if gsiEvent.Player == nil || gsiEvent.Player.Steamid != shared.PlayerID || gsiEvent.Round == nil {
 			return
 		}
 
@@ -43,10 +39,10 @@ func InitializeEventHandlers() {
 		// Send log to frontend
 		api.PushLog(*eventLog)
 
-		if gsiEvent.CSMap.Name != shared.LastMap ||
-			(gsiEvent.CSMap.Round == 1 && shared.LastRound >= 1) {
+		if gsiEvent.CSMap.Name != shared.LastMap || gsiEvent.Round.Phase == "gameover" {
 			shared.CurrentMatchID = uuid.New().String()
 			shared.LastMap = gsiEvent.CSMap.Name
+			shared.LastRound = 0
 			log.Printf("New match started: %s on map %s", shared.CurrentMatchID, shared.LastMap)
 		}
 
@@ -80,16 +76,16 @@ func InitializeEventHandlers() {
 	})
 
 	cs2gsi.RegisterNonEventHandler(func(gsiEvent *structs.GSIEvent) {
-		fmt.Printf("(%v) #N/A %v\n",
-			time.Now().Format("2006-01-02 15:04:05.000"),
-			gsiEvent.GetOriginalRequestFlat(),
-		)
+		// fmt.Printf("(%v) #N/A %v\n",
+		// 	time.Now().Format("2006-01-02 15:04:05.000"),
+		// 	gsiEvent.GetOriginalRequestFlat(),
+		// )
 	})
 }
 
 // Listen starts up the GSI server to listen for POST requests (with event data).
 func Listen() {
 	if err := cs2gsi.StartupAndServe(fmt.Sprintf(":%d", GSI_PORT)); err != nil {
-		panic("FAILED TO START SERVER")
+		log.Fatalf("failed to start GSI server: %v", err)
 	}
 }

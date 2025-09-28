@@ -69,35 +69,55 @@ func storeKillEvent(ctx context.Context, event *shared.RedisKillEvent) error {
 }
 
 func GetAllPlayerEvents(ctx context.Context) ([]RedisPlayerEvent, error) {
-	events, err := RedisClient.JSONGet(ctx, fmt.Sprintf("matches:*:round:*:player:%s:events", shared.PlayerID)).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	if events == "" {
-		return []RedisPlayerEvent{}, nil
-	}
-
 	var playerEvents []RedisPlayerEvent
-	if err := json.Unmarshal([]byte(events), &playerEvents); err != nil {
+
+	pattern := fmt.Sprintf("matches:*:round:*:player:%s:events", shared.PlayerID)
+	iter := RedisClient.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		val, err := RedisClient.JSONGet(ctx, iter.Val()).Result()
+		if err != nil {
+			return nil, fmt.Errorf("jsonget failed for key %s: %w", iter.Val(), err)
+		}
+		if val == "" {
+			continue
+		}
+		var ev RedisPlayerEvent
+		if err := json.Unmarshal([]byte(val), &ev); err != nil {
+			return nil, fmt.Errorf("unmarshal failed for key %s: %w", iter.Val(), err)
+		}
+		playerEvents = append(playerEvents, ev)
+	}
+	if err := iter.Err(); err != nil {
 		return nil, err
 	}
+
 	return playerEvents, nil
 }
 
 func GetAllKillEvents(ctx context.Context) ([]RedisKillEvent, error) {
-	events, err := RedisClient.JSONGet(ctx, fmt.Sprintf("matches:*:round:*:player:%s:kills", shared.PlayerID)).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	if events == "" {
-		return []RedisKillEvent{}, nil
-	}
-
 	var killEvents []RedisKillEvent
-	if err := json.Unmarshal([]byte(events), &killEvents); err != nil {
+
+	pattern := fmt.Sprintf("matches:*:round:*:player:%s:kills", shared.PlayerID)
+	iter := RedisClient.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		val, err := RedisClient.JSONGet(ctx, iter.Val()).Result()
+		if err != nil {
+			return nil, fmt.Errorf("jsonget failed for key %s: %w", iter.Val(), err)
+		}
+		if val == "" {
+			continue
+		}
+		var ev RedisKillEvent
+		if err := json.Unmarshal([]byte(val), &ev); err != nil {
+			return nil, fmt.Errorf("unmarshal failed for key %s: %w", iter.Val(), err)
+		}
+		killEvents = append(killEvents, ev)
+	}
+	if err := iter.Err(); err != nil {
 		return nil, err
 	}
+
 	return killEvents, nil
 }

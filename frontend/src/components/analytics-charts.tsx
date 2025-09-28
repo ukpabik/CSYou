@@ -1,240 +1,615 @@
 "use client"
 
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   LineChart,
   Line,
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  Area,
+  ComposedChart,
 } from "recharts"
-import { Activity, Target, Trophy, Clock, Crosshair, Shield, Zap } from "lucide-react"
+import { Activity, Target, Clock, Crosshair, RefreshCw, DollarSign, Heart, Users } from "lucide-react"
 
 interface AnalyticsChartsProps {
   dataSource: "redis" | "clickhouse"
+  pollInterval?: number // in ms, default 2000
 }
 
-// Mock data - replace this with real API calls
-const killData = [
-  { time: "00:30", kills: 2, deaths: 1, assists: 0 },
-  { time: "01:15", kills: 5, deaths: 2, assists: 1 },
-  { time: "02:00", kills: 8, deaths: 3, assists: 2 },
-  { time: "02:45", kills: 12, deaths: 4, assists: 3 },
-  { time: "03:30", kills: 15, deaths: 6, assists: 4 },
-]
+interface KillEvent {
+  match_id: string
+  round: number
+  map: string
+  team: string
+  steamid: string
+  name: string
+  mode: string
+  active_gun: {
+    name: string
+    type: string
+    ammo: number
+    reserve: number
+    skin: string
+    headshot: boolean
+  }
+  timestamp: number // unix seconds from backend
+}
 
-const roundData = [
-  { round: 1, score: 1, economy: 4000, winner: "CT" },
-  { round: 2, score: 2, economy: 3200, winner: "T" },
-  { round: 3, score: 2, economy: 5500, winner: "CT" },
-  { round: 4, score: 3, economy: 2800, winner: "T" },
-  { round: 5, score: 4, economy: 4800, winner: "CT" },
-]
+interface PlayerEvent {
+  match_id: string
+  round: number
+  map: string
+  team: string
+  steamid: string
+  name: string
+  mode: string
+  health: number
+  armor: number
+  helmet: boolean
+  money: number
+  equip_value: number
+  round_kills: number
+  round_killhs: number
+  kills: number
+  assists: number
+  deaths: number
+  mvps: number
+  score: number
+  timestamp: number
+  win_team: string
+}
 
-const weaponData = [
-  { weapon: "AK-47", kills: 45, percentage: 35 },
-  { weapon: "M4A4", kills: 38, percentage: 30 },
-  { weapon: "AWP", kills: 25, percentage: 20 },
-  { weapon: "Glock", kills: 12, percentage: 10 },
-  { weapon: "Other", kills: 6, percentage: 5 },
-]
+export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsChartsProps) {
+  const [killEvents, setKillEvents] = useState<KillEvent[]>([])
+  const [playerEvents, setPlayerEvents] = useState<PlayerEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-const COLORS = ["#8b5cf6", "#06d6a0", "#f72585", "#ffbe0b", "#fb8500"]
+  const fetchData = async (showRefreshing = false) => {
+    try {
+      if (showRefreshing) setIsRefreshing(true)
 
-// TODO: Update this with a real data source
-export function AnalyticsCharts({ dataSource }: AnalyticsChartsProps) {
+      const [killResponse, playerResponse] = await Promise.all([
+        fetch("http://localhost:8080/redis/kill-events"),
+        fetch("http://localhost:8080/redis/player-events"),
+      ])
+
+      if (!killResponse.ok) throw new Error("Failed to fetch kill events")
+      if (!playerResponse.ok) throw new Error("Failed to fetch player events")
+
+      const [rawKillData, rawPlayerData] = await Promise.all([killResponse.json(), playerResponse.json()])
+
+      const killData: KillEvent[] = rawKillData.map((e: any) => ({
+        ...e,
+        timestamp: e.timestamp * 1000,
+      }))
+
+      const playerData: PlayerEvent[] = rawPlayerData.map((e: any) => ({
+        ...e,
+        timestamp: e.timestamp * 1000,
+      }))
+
+      setKillEvents(killData)
+      setPlayerEvents(playerData)
+
+      setLastUpdate(new Date())
+      setError(null)
+
+      if (loading) setLoading(false)
+      if (showRefreshing) setTimeout(() => setIsRefreshing(false), 300)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch data")
+      if (loading) setLoading(false)
+      if (showRefreshing) setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+    intervalRef.current = setInterval(() => fetchData(true), pollInterval)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [pollInterval, dataSource])
+
+  const calculateStats = () => {
+    const totalKills = killEvents.length
+    const headshotKills = killEvents.filter((e) => e.active_gun.headshot).length
+    const headshotPercentage = totalKills > 0 ? ((headshotKills / totalKills) * 100).toFixed(1) : "0"
+
+    const uniqueRounds = new Set(killEvents.map((e) => e.round))
+    const roundCount = uniqueRounds.size || 1
+
+    const latestPlayerEvent =
+      playerEvents.length > 0
+        ? playerEvents.reduce((latest, current) => (current.timestamp > latest.timestamp ? current : latest))
+        : null
+
+    return {
+      totalKills,
+      headshotPercentage,
+      roundCount,
+      killsPerRound: (totalKills / roundCount).toFixed(1),
+      currentMoney: latestPlayerEvent?.money || 0,
+      currentHealth: latestPlayerEvent?.health || 100,
+      kdr: latestPlayerEvent ? (latestPlayerEvent.kills / Math.max(latestPlayerEvent.deaths, 1)).toFixed(2) : "0.00",
+    }
+  }
+
+  const processKillTimeline = () => {
+    const timeline: { [key: string]: { kills: number; time: string } } = {}
+    killEvents.forEach((event) => {
+      const date = new Date(event.timestamp)
+      const timeKey = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`
+      if (!timeline[timeKey]) {
+        timeline[timeKey] = { time: timeKey, kills: 0 }
+      }
+      timeline[timeKey].kills++
+    })
+    return Object.values(timeline)
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .slice(-10)
+  }
+
+  const processWeaponStats = () => {
+    const weaponCounts: { [key: string]: number } = {}
+    let totalKills = 0
+    killEvents.forEach((event) => {
+      const weapon = event.active_gun.name || "Unknown"
+      weaponCounts[weapon] = (weaponCounts[weapon] || 0) + 1
+      totalKills++
+    })
+    return Object.entries(weaponCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([weapon, kills]) => ({
+        weapon,
+        kills,
+        percentage: Math.round((kills / totalKills) * 100),
+      }))
+  }
+
+  const processRoundData = () => {
+    const roundKills: { [key: number]: number } = {}
+    killEvents.forEach((event) => {
+      roundKills[event.round] = (roundKills[event.round] || 0) + 1
+    })
+    return Object.entries(roundKills)
+      .map(([round, kills]) => ({
+        round: Number.parseInt(round),
+        kills,
+      }))
+      .sort((a, b) => a.round - b.round)
+      .slice(-10)
+  }
+
+  const processEconomyData = () => {
+    const rounds = Array.from(new Set(playerEvents.map((e) => e.round))).sort((a, b) => a - b)
+    return rounds.slice(-10).map((round) => {
+      const roundPlayerEvents = playerEvents.filter((e) => e.round === round)
+      const roundKillEvents = killEvents.filter((e) => e.round === round)
+
+      const avgMoney =
+        roundPlayerEvents.length > 0
+          ? Math.round(roundPlayerEvents.reduce((sum, e) => sum + e.money, 0) / roundPlayerEvents.length)
+          : 0
+
+      const avgEquipValue =
+        roundPlayerEvents.length > 0
+          ? Math.round(roundPlayerEvents.reduce((sum, e) => sum + e.equip_value, 0) / roundPlayerEvents.length)
+          : 0
+
+      return {
+        round,
+        money: avgMoney,
+        equipValue: avgEquipValue,
+        kills: roundKillEvents.length,
+        ecoRound: avgMoney < 3000,
+      }
+    })
+  }
+
+  const processHealthArmorData = () => {
+    const rounds = Array.from(new Set(playerEvents.map((e) => e.round))).sort((a, b) => a - b)
+    return rounds.slice(-10).map((round) => {
+      const roundEvents = playerEvents.filter((e) => e.round === round)
+      const avgHealth =
+        roundEvents.length > 0
+          ? Math.round(roundEvents.reduce((sum, e) => sum + e.health, 0) / roundEvents.length)
+          : 100
+
+      const avgArmor =
+        roundEvents.length > 0 ? Math.round(roundEvents.reduce((sum, e) => sum + e.armor, 0) / roundEvents.length) : 0
+
+      return {
+        round,
+        health: avgHealth,
+        armor: avgArmor,
+      }
+    })
+  }
+
+  const processPerformanceData = () => {
+    const rounds = Array.from(new Set(playerEvents.map((e) => e.round))).sort((a, b) => a - b)
+    return rounds.slice(-10).map((round) => {
+      const roundEvents = playerEvents.filter((e) => e.round === round)
+      const latestInRound =
+        roundEvents.length > 0
+          ? roundEvents.reduce((latest, current) => (current.timestamp > latest.timestamp ? current : latest))
+          : null
+
+      return {
+        round,
+        kills: latestInRound?.kills || 0,
+        deaths: latestInRound?.deaths || 0,
+        assists: latestInRound?.assists || 0,
+        score: latestInRound?.score || 0,
+      }
+    })
+  }
+
+  const processRecentKills = () => {
+    return [...killEvents]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5)
+      .map((kill) => ({
+        ...kill,
+        timeAgo: getTimeAgo(new Date(kill.timestamp)),
+      }))
+  }
+
+  const getTimeAgo = (date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin text-white" />
+          <span className="text-white">Loading analytics data...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error && killEvents.length === 0 && playerEvents.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-400">Error: {error}</div>
+      </div>
+    )
+  }
+
+  const stats = calculateStats()
+  const killTimeline = processKillTimeline()
+  // const weaponData = processWeaponStats()
+  // const roundData = processRoundData()
+  const economyData = processEconomyData()
+  const recentKills = processRecentKills()
+  const healthArmorData = processHealthArmorData()
+  const performanceData = processPerformanceData()
+
   return (
     <div className="grid gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-2">
+          <div className={`h-2 w-2 rounded-full ${isRefreshing ? "bg-yellow-400 animate-pulse" : "bg-green-400"}`} />
+          <span className="text-gray-300">
+            Auto-refresh every {pollInterval / 1000}s • Last update: {lastUpdate.toLocaleTimeString()}
+          </span>
+        </div>
+        {error && <span className="text-xs text-red-400">Connection issue - retrying...</span>}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Kills</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-white">Total Kills</CardTitle>
+            <Target className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,247</div>
-            <p className="text-xs text-muted-foreground">+12% from last match</p>
+            <div className="text-2xl font-bold text-white">{stats.totalKills}</div>
+            <p className="text-xs text-gray-400">{stats.killsPerRound} per round</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">K/D Ratio</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-white">K/D Ratio</CardTitle>
+            <Users className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1.34</div>
-            <p className="text-xs text-muted-foreground">+0.08 improvement</p>
+            <div className="text-2xl font-bold text-white">{stats.kdr}</div>
+            <p className="text-xs text-gray-400">Kill/Death ratio</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-white">Headshot %</CardTitle>
+            <Crosshair className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">67%</div>
-            <p className="text-xs text-muted-foreground">Last 30 matches</p>
+            <div className="text-2xl font-bold text-white">{stats.headshotPercentage}%</div>
+            <p className="text-xs text-gray-400">Precision rating</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Match Time</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-white">Current Money</CardTitle>
+            <DollarSign className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">34m</div>
-            <p className="text-xs text-muted-foreground">-2m faster than avg</p>
+            <div className="text-2xl font-bold text-white">${stats.currentMoney.toLocaleString()}</div>
+            <p className="text-xs text-gray-400">Available funds</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-white">Health</CardTitle>
+            <Heart className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{stats.currentHealth}</div>
+            <p className="text-xs text-gray-400">Current HP</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-white">Rounds</CardTitle>
+            <Clock className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{stats.roundCount}</div>
+            <p className="text-xs text-gray-400">Current session</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-white">
               <Crosshair className="h-5 w-5" />
               Kill Timeline
             </CardTitle>
-            <CardDescription>Real-time kill tracking during matches</CardDescription>
+            <CardDescription className="text-gray-400">Kills over time (last 10 intervals)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={killData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Line type="monotone" dataKey="kills" stroke="hsl(var(--chart-1))" strokeWidth={2} />
-                <Line type="monotone" dataKey="deaths" stroke="hsl(var(--chart-4))" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+            {killTimeline.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={killTimeline}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="time" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="kills"
+                    stroke="#60a5fa"
+                    strokeWidth={3}
+                    dot={{ fill: "#60a5fa", strokeWidth: 2, r: 4 }}
+                    animationDuration={300}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-400">No kill data available</div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Round Economy
+            <CardTitle className="flex items-center gap-2 text-white">
+              <DollarSign className="h-5 w-5" />
+              Economy Analysis
             </CardTitle>
-            <CardDescription>Economic performance by round</CardDescription>
+            <CardDescription className="text-gray-400">Money and equipment value by round</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={roundData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="round" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="economy"
-                  stroke="hsl(var(--chart-2))"
-                  fill="hsl(var(--chart-2))"
-                  fillOpacity={0.3}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {economyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={economyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="round" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                    }}
+                    formatter={(value: any, name: string) => [
+                      name.includes("money") || name.includes("Value") ? `$${value.toLocaleString()}` : value,
+                      name === "money" ? "Money" : name === "equipValue" ? "Equipment Value" : name,
+                    ]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="money"
+                    stroke="#34d399"
+                    fill="#34d399"
+                    fillOpacity={0.3}
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="equipValue"
+                    stroke="#fbbf24"
+                    strokeWidth={2}
+                    dot={{ fill: "#fbbf24", strokeWidth: 2, r: 3 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-400">No economy data available</div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Weapon Usage
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Heart className="h-5 w-5" />
+              Health & Armor
             </CardTitle>
-            <CardDescription>Most effective weapons by kill count</CardDescription>
+            <CardDescription className="text-gray-400">Player survivability by round</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={weaponData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="kills"
-                  label={({ payload }: any) => `${payload.weapon} (${payload.percentage}%)`}
-                >
-                  {weaponData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {healthArmorData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={healthArmorData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="round" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="health"
+                    stroke="#f87171"
+                    strokeWidth={2}
+                    dot={{ fill: "#f87171", strokeWidth: 2, r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="armor"
+                    stroke="#60a5fa"
+                    strokeWidth={2}
+                    dot={{ fill: "#60a5fa", strokeWidth: 2, r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-400">
+                No health/armor data available
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5" />
-              Match Performance
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Users className="h-5 w-5" />
+              Performance Tracking
             </CardTitle>
-            <CardDescription>Recent match results and trends</CardDescription>
+            <CardDescription className="text-gray-400">KDA progression over rounds</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[
-                { map: "de_dust2", result: "Win", score: "16-12", kd: "1.8" },
-                { map: "de_mirage", result: "Loss", score: "14-16", kd: "1.2" },
-                { map: "de_inferno", result: "Win", score: "16-8", kd: "2.1" },
-                { map: "de_cache", result: "Win", score: "16-10", kd: "1.6" },
-              ].map((match, index) => (
-                <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-accent/50">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={`/.jpg?height=32&width=32&query=${match.map}`}
-                      alt={match.map}
-                      className="w-8 h-8 rounded"
-                    />
-                    <div>
-                      <p className="font-medium">{match.map}</p>
-                      <p className="text-sm text-muted-foreground">{match.score}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant={match.result === "Win" ? "default" : "destructive"}>{match.result}</Badge>
-                    <p className="text-sm text-muted-foreground mt-1">K/D: {match.kd}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {performanceData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={performanceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="round" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="kills"
+                    stroke="#34d399"
+                    strokeWidth={2}
+                    dot={{ fill: "#34d399", strokeWidth: 2, r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="deaths"
+                    stroke="#f87171"
+                    strokeWidth={2}
+                    dot={{ fill: "#f87171", strokeWidth: 2, r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="assists"
+                    stroke="#fbbf24"
+                    strokeWidth={2}
+                    dot={{ fill: "#fbbf24", strokeWidth: 2, r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-400">
+                No performance data available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-gray-900 border-gray-700">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Activity className="h-5 w-5" />
+            Recent Kills
+          </CardTitle>
+          <CardDescription className="text-gray-400">Latest kill feed</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {recentKills.length > 0 ? (
+              recentKills.map((kill, index) => (
+                <div
+                  key={`${kill.timestamp}-${index}`}
+                  className="flex items-center justify-between p-2 rounded bg-gray-800 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-white">{kill.name}</span>
+                    {kill.active_gun.headshot && (
+                      <Badge variant="outline" className="text-xs border-red-400 text-red-400">
+                        HS
+                      </Badge>
+                    )}
+                    <span className="text-gray-400">killed with</span>
+                    <span className="text-blue-400">{kill.active_gun.name || "Unknown"}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{kill.timeAgo}</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 py-4">No recent kills</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

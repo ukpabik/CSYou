@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	"github.com/rs/cors"
 	"github.com/ukpabik/CSYou/pkg/api/handlers"
 	"github.com/ukpabik/CSYou/pkg/api/model"
 )
@@ -78,8 +79,12 @@ func PushLog(logg model.Log) {
 // InitializeAPIServer sets up the API server with routes and middleware
 func InitializeAPIServer(addr, port string) *chi.Mux {
 	chiRouter := chi.NewRouter()
+	chiRouter.Use(cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	}).Handler)
 
-	// Your existing routes
+	// Routes
 	chiRouter.Route("/redis", func(r chi.Router) {
 		r.Get("/player-events", handlers.GetAllPlayerEventsHandler)
 		r.Get("/kill-events", handlers.GetAllKillEventsHandler)
