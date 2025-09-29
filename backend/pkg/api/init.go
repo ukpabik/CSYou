@@ -88,6 +88,8 @@ func InitializeAPIServer(addr, port string) *chi.Mux {
 	chiRouter.Route("/redis", func(r chi.Router) {
 		r.Get("/player-events", handlers.GetAllPlayerEventsHandler)
 		r.Get("/kill-events", handlers.GetAllKillEventsHandler)
+		r.Get("/cache-size", handlers.GetCacheSizeHandler)
+		r.Delete("/clear", handlers.ClearCacheHandler)
 	})
 
 	// WebSocket endpoint

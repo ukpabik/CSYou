@@ -8,18 +8,26 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Trash2, Database, RefreshCw } from "lucide-react"
 
 export function CacheManager() {
-  const [cacheSize, setCacheSize] = useState("0 MB")
+  const [cacheSize, setCacheSize] = useState("0 Records")
   const [isClearing, setIsClearing] = useState(false)
   const [lastCleared, setLastCleared] = useState<Date | null>(null)
 
-  useEffect(() => {
-    const updateCacheSize = () => {
-      const size = Math.floor(Math.random() * 500) + 50
-      setCacheSize(`${size} MB`)
+  const fetchCacheSize = async () => {
+    try {
+      const response = await fetch("http://localhost:8080/redis/cache-size")
+      if (!response.ok) {
+        throw new Error("Failed to fetch cache size")
+      }
+      const data = await response.json()
+      setCacheSize(`${data.memory_value} Records`)
+    } catch (error) {
+      console.error("Failed to fetch cache size:", error)
     }
+  }
 
-    updateCacheSize()
-    const interval = setInterval(updateCacheSize, 30000)
+  useEffect(() => {
+    fetchCacheSize()
+    const interval = setInterval(fetchCacheSize, 5000)
 
     return () => clearInterval(interval)
   }, [])
@@ -28,12 +36,15 @@ export function CacheManager() {
     setIsClearing(true)
 
     try {
-      // TODO: Call backend API to clear cache
+      const response = await fetch("http://localhost:8080/redis/clear", {
+        method: "DELETE",
+      })
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      if (!response.ok) {
+        throw new Error("Failed to clear cache")
+      }
 
-      setCacheSize("0 MB")
+      await fetchCacheSize()
       setLastCleared(new Date())
     } catch (error) {
       console.error("Failed to clear cache:", error)

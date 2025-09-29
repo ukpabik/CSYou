@@ -1,8 +1,10 @@
 package gsi
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/LukeyR/CS2-GameStateIntegration/pkg/cs2gsi"
@@ -17,12 +19,46 @@ import (
 )
 
 const GSI_PORT = 3000
-const STEAM_ID = "76561198107182787" // Replace with your actual SteamID (switch to cfg later?)
+
+// Config struct for reading config.json
+type Config struct {
+	SteamID string `json:"steam_id"`
+}
+
+var STEAM_ID string
+
+// LoadConfig loads the steam_id from config.json
+func LoadConfig() {
+	file, err := os.Open("../config.json")
+	if err != nil {
+		log.Fatalf("failed to open config.json: %v", err)
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	var config Config
+	if err := decoder.Decode(&config); err != nil {
+		log.Fatalf("failed to parse config.json: %v", err)
+	}
+
+	if config.SteamID == "" {
+		log.Fatalf("steam_id must be set in config.json")
+	}
+
+	STEAM_ID = config.SteamID
+	log.Printf("Loaded SteamID from config: %s", STEAM_ID)
+}
 
 // InitializeEventHandlers initializes all event handlers for every captured event.
+//
+// NOTE: Make sure you update your `config.json` with your actual SteamID
+// before running this, otherwise no events will be tracked.
 func InitializeEventHandlers() {
-	cs2gsi.RegisterGlobalHandler(func(gsiEvent *structs.GSIEvent, gameEvent events.GameEventDetails) {
+	if STEAM_ID == "" {
+		LoadConfig()
+	}
 
+	cs2gsi.RegisterGlobalHandler(func(gsiEvent *structs.GSIEvent, gameEvent events.GameEventDetails) {
 		if shared.PlayerID == "" {
 			shared.PlayerID = STEAM_ID
 		}

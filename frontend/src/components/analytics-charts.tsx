@@ -14,11 +14,11 @@ import {
   Area,
   ComposedChart,
 } from "recharts"
-import { Activity, Target, Clock, Crosshair, RefreshCw, DollarSign, Heart, Users } from "lucide-react"
+import { Activity, Target, Clock, Crosshair, RefreshCw, DollarSign, Heart, Users, Inbox, AlertCircle } from "lucide-react"
 
 interface AnalyticsChartsProps {
   dataSource: "redis" | "clickhouse"
-  pollInterval?: number // in ms, default 2000
+  pollInterval?: number
 }
 
 interface KillEvent {
@@ -37,7 +37,7 @@ interface KillEvent {
     skin: string
     headshot: boolean
   }
-  timestamp: number // unix seconds from backend
+  timestamp: number
 }
 
 interface PlayerEvent {
@@ -159,38 +159,6 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
       .slice(-10)
   }
 
-  const processWeaponStats = () => {
-    const weaponCounts: { [key: string]: number } = {}
-    let totalKills = 0
-    killEvents.forEach((event) => {
-      const weapon = event.active_gun.name || "Unknown"
-      weaponCounts[weapon] = (weaponCounts[weapon] || 0) + 1
-      totalKills++
-    })
-    return Object.entries(weaponCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([weapon, kills]) => ({
-        weapon,
-        kills,
-        percentage: Math.round((kills / totalKills) * 100),
-      }))
-  }
-
-  const processRoundData = () => {
-    const roundKills: { [key: number]: number } = {}
-    killEvents.forEach((event) => {
-      roundKills[event.round] = (roundKills[event.round] || 0) + 1
-    })
-    return Object.entries(roundKills)
-      .map(([round, kills]) => ({
-        round: Number.parseInt(round),
-        kills,
-      }))
-      .sort((a, b) => a.round - b.round)
-      .slice(-10)
-  }
-
   const processEconomyData = () => {
     const rounds = Array.from(new Set(playerEvents.map((e) => e.round))).sort((a, b) => a - b)
     return rounds.slice(-10).map((round) => {
@@ -286,6 +254,38 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
     )
   }
 
+  // Show empty state if no data
+  if (killEvents.length === 0 && playerEvents.length === 0 && !loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <Card className="bg-gray-900 border-gray-700 max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="rounded-full bg-gray-800 p-4">
+                <Inbox className="h-12 w-12 text-gray-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-white">No Data Available</h3>
+                <p className="text-sm text-gray-400">
+                  There's no analytics data to display yet. Start playing some matches to see your stats here!
+                </p>
+              </div>
+              {error && (
+                <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-950/20 px-3 py-2 rounded-md">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Connection issue</span>
+                </div>
+              )}
+              <div className="text-xs text-gray-500">
+                Auto-refreshing every {pollInterval / 1000}s...
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (error && killEvents.length === 0 && playerEvents.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -296,8 +296,6 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
 
   const stats = calculateStats()
   const killTimeline = processKillTimeline()
-  // const weaponData = processWeaponStats()
-  // const roundData = processRoundData()
   const economyData = processEconomyData()
   const recentKills = processRecentKills()
   const healthArmorData = processHealthArmorData()

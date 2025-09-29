@@ -121,3 +121,49 @@ func GetAllKillEvents(ctx context.Context) ([]RedisKillEvent, error) {
 
 	return killEvents, nil
 }
+
+// ClearCache removes all keys related to the current player from Redis.
+func ClearCache(ctx context.Context) error {
+	pattern := "matches:*"
+	iter := RedisClient.Scan(ctx, 0, pattern, 100).Iterator()
+
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("scan failed: %w", err)
+	}
+
+	if len(keys) > 0 {
+		if err := RedisClient.Del(ctx, keys...).Err(); err != nil {
+			return fmt.Errorf("delete failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// GetCacheSize returns the total memory usage of the Redis instance in bytes.
+func GetCacheSize(ctx context.Context) (int64, error) {
+	pattern := "matches:*"
+	cursor := uint64(0)
+	count := int64(0)
+
+	for {
+		keys, nextCursor, err := RedisClient.Scan(ctx, cursor, pattern, 1000).Result()
+		if err != nil {
+			return -1, fmt.Errorf("scan failed: %w", err)
+		}
+
+		count += int64(len(keys))
+		cursor = nextCursor
+
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return count, nil
+}
