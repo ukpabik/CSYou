@@ -3,6 +3,8 @@
 CSYou is a self-hosted analytics platform for Counter-Strike 2 that captures **live game telemetry** via CS2's Game State Integration (GSI) to provide real-time insights into your gameplay.
 
 <img width="1908" height="999" alt="image" src="https://github.com/user-attachments/assets/890a1dcb-b7aa-4def-b98c-ee1c79edafa3" />
+<img width="2536" height="1355" alt="image" src="https://github.com/user-attachments/assets/900073a1-293c-45fe-bc01-0d5fdea4c2b0" />
+
 
 ---
 
