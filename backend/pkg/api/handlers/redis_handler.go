@@ -7,7 +7,7 @@ import (
 	"github.com/ukpabik/CSYou/pkg/redis"
 )
 
-func GetAllPlayerEventsHandler(w http.ResponseWriter, r *http.Request) {
+func GetAllRedisPlayerEventsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	events, err := redis.GetAllPlayerEvents(ctx)
 	if err != nil {
@@ -19,7 +19,7 @@ func GetAllPlayerEventsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(events)
 }
 
-func GetAllKillEventsHandler(w http.ResponseWriter, r *http.Request) {
+func GetAllRedisKillEventsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	events, err := redis.GetAllKillEvents(ctx)
 	if err != nil {
@@ -58,5 +58,8 @@ func GetCacheSizeHandler(w http.ResponseWriter, r *http.Request) {
 		MemoryValue: memoryUsage,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(memoryObject)
+	if err := json.NewEncoder(w).Encode(memoryObject); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

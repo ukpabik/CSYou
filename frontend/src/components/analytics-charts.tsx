@@ -77,25 +77,87 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
     try {
       if (showRefreshing) setIsRefreshing(true)
 
+      const baseUrl = dataSource === "redis" ? "http://localhost:8080/redis" : "http://localhost:8080/db"
+
       const [killResponse, playerResponse] = await Promise.all([
-        fetch("http://localhost:8080/redis/kill-events"),
-        fetch("http://localhost:8080/redis/player-events"),
+        fetch(`${baseUrl}/kill-events`),
+        fetch(`${baseUrl}/player-events`),
       ])
 
       if (!killResponse.ok) throw new Error("Failed to fetch kill events")
       if (!playerResponse.ok) throw new Error("Failed to fetch player events")
 
-      const [rawKillData, rawPlayerData] = await Promise.all([killResponse.json(), playerResponse.json()])
+      const [rawKillData, rawPlayerData] = await Promise.all([
+        killResponse.json(),
+        playerResponse.json(),
+      ])
 
-      const killData: KillEvent[] = rawKillData.map((e: any) => ({
-        ...e,
-        timestamp: e.timestamp * 1000,
-      }))
+      let killData: KillEvent[]
+      let playerData: PlayerEvent[]
 
-      const playerData: PlayerEvent[] = rawPlayerData.map((e: any) => ({
-        ...e,
-        timestamp: e.timestamp * 1000,
-      }))
+      const toMs = (v: any) => {
+        const n = typeof v === "string" ? parseInt(v, 10) : Number(v)
+        if (!Number.isFinite(n)) return Date.now()
+        return n < 1e12 ? n * 1000 : n // seconds→ms, otherwise assume ms
+      }
+
+      if (dataSource === "redis") {
+        killData = rawKillData.map((e: any) => ({ ...e, timestamp: toMs(e.timestamp) }))
+        playerData = rawPlayerData.map((e: any) => ({ ...e, timestamp: toMs(e.timestamp) }))
+      } else {
+        const wn = (e: any) => e.weapon_name ?? e.WeaponName ?? e.weapon?.weapon_name ?? ""
+        const wt = (e: any) => e.weapon_type ?? e.WeaponType ?? e.weapon?.weapon_type ?? ""
+        const wa = (e: any) => e.weapon_ammo ?? e.WeaponAmmo ?? e.weapon?.weapon_ammo ?? 0
+        const wr = (e: any) => e.weapon_reserve ?? e.WeaponReserve ?? e.weapon?.weapon_reserve ?? 0
+        const ws = (e: any) => e.weapon_skin ?? e.WeaponSkin ?? e.weapon?.weapon_skin ?? ""
+        const wh = (e: any) => e.weapon_headshot ?? e.WeaponHeadshot ?? e.weapon?.weapon_headshot ?? false
+
+        const ts = (e: any) =>
+          e.timestamp ?? e.Timestamp ?? e.event_timestamp ?? e.EventTS
+
+        killData = rawKillData.map((e: any) => ({
+          match_id: e.match_id ?? e.MatchId,
+          round: e.round ?? e.Round,
+          map: e.map ?? e.Map,
+          team: e.team ?? e.Team,
+          steamid: e.steamid ?? e.SteamID,
+          name: e.name ?? e.Name,
+          mode: e.mode ?? e.Mode,
+          active_gun: {
+            name: wn(e),
+            type: wt(e),
+            ammo: Number(wa(e)) || 0,
+            reserve: Number(wr(e)) || 0,
+            skin: ws(e),
+            headshot: Boolean(wh(e)),
+          },
+          timestamp: toMs(ts(e)),
+        }))
+
+        playerData = rawPlayerData.map((e: any) => ({
+          match_id: e.match_id ?? e.MatchId,
+          round: e.round ?? e.Round,
+          map: e.map ?? e.Map,
+          team: e.team ?? e.Team,
+          steamid: e.steamid ?? e.SteamID,
+          name: e.name ?? e.Name,
+          mode: e.mode ?? e.Mode,
+          health: Number(e.health ?? e.Health) || 0,
+          armor: Number(e.armor ?? e.Armor) || 0,
+          helmet: Boolean(e.helmet ?? e.Helmet),
+          money: Number(e.money ?? e.Money) || 0,
+          equip_value: Number(e.equip_value ?? e.EquipValue) || 0,
+          round_kills: Number(e.round_kills ?? e.RoundKills) || 0,
+          round_killhs: Number(e.round_killhs ?? e.RoundKillHS) || 0,
+          kills: Number(e.kills ?? e.Kills) || 0,
+          assists: Number(e.assists ?? e.Assists) || 0,
+          deaths: Number(e.deaths ?? e.Deaths) || 0,
+          mvps: Number(e.mvps ?? e.MVPs) || 0,
+          score: Number(e.score ?? e.Score) || 0,
+          timestamp: toMs(e.event_timestamp ?? e.EventTS ?? e.timestamp ?? e.Timestamp),
+          win_team: e.win_team ?? e.WinTeam ?? "",
+        }))
+      }
 
       setKillEvents(killData)
       setPlayerEvents(playerData)

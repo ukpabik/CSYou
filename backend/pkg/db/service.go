@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ukpabik/CSYou/pkg/api/model"
 	"github.com/ukpabik/CSYou/pkg/shared"
 )
 
@@ -11,6 +12,38 @@ const (
 	killEventTableName   = "cs2_kill_events"
 	playerEventTableName = "cs2_player_events"
 )
+
+func GetAllKillEvents() ([]model.ClickHouseKillEvent, error) {
+	if ClickHouseClient == nil {
+		return nil, fmt.Errorf("clickhouse client is not initialized")
+	}
+	context := context.Background()
+	var events []model.ClickHouseKillEvent
+	query := fmt.Sprintf("SELECT * FROM %s", killEventTableName)
+
+	err := ClickHouseClient.Select(context, &events, query)
+	if err != nil {
+		fmt.Println(err)
+		return nil, fmt.Errorf("failed to execute query: %v", err)
+	}
+
+	return events, nil
+}
+
+func GetAllPlayerEvents() ([]model.ClickHousePlayerEvent, error) {
+	if ClickHouseClient == nil {
+		return nil, fmt.Errorf("clickhouse client is not initialized")
+	}
+	context := context.Background()
+	var events []model.ClickHousePlayerEvent
+	query := fmt.Sprintf("SELECT * FROM %s", playerEventTableName)
+	err := ClickHouseClient.Select(context, &events, query)
+	if err != nil {
+		fmt.Println(err)
+		return nil, fmt.Errorf("failed to execute query: %v", err)
+	}
+	return events, nil
+}
 
 // InsertKillEvents inserts multiple kill events using batch operation
 func InsertKillEvents(killEvents []shared.RedisKillEvent) error {
