@@ -98,7 +98,7 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
       const toMs = (v: any) => {
         const n = typeof v === "string" ? parseInt(v, 10) : Number(v)
         if (!Number.isFinite(n)) return Date.now()
-        return n < 1e12 ? n * 1000 : n // seconds→ms, otherwise assume ms
+        return n < 1e12 ? n * 1000 : n
       }
 
       if (dataSource === "redis") {
