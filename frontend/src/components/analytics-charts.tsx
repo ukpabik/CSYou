@@ -14,7 +14,19 @@ import {
   Area,
   ComposedChart,
 } from "recharts"
-import { Activity, Target, Clock, Crosshair, RefreshCw, DollarSign, Heart, Users, Inbox, AlertCircle } from "lucide-react"
+import {
+  Activity,
+  Target,
+  Clock,
+  Crosshair,
+  RefreshCw,
+  DollarSign,
+  Heart,
+  Users,
+  Inbox,
+  AlertCircle,
+  Search,
+} from "lucide-react"
 
 interface AnalyticsChartsProps {
   dataSource: "redis" | "clickhouse"
@@ -73,15 +85,42 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
   const [isRefreshing, setIsRefreshing] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // query filters
+  const [filters, setFilters] = useState({
+    match_id: "",
+    round: "",
+    weapon_name: "",
+    headshot: "",
+  })
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ ...filters, [e.target.name]: e.target.value })
+  }
+
   const fetchData = async (showRefreshing = false) => {
     try {
       if (showRefreshing) setIsRefreshing(true)
 
-      const baseUrl = dataSource === "redis" ? "http://localhost:8080/redis" : "http://localhost:8080/db"
+      const baseUrl =
+        dataSource === "redis" ? "http://localhost:8080/redis" : "http://localhost:8080/db"
+
+      const queryString = new URLSearchParams(
+        Object.entries(filters).filter(([_, v]) => v !== "")
+      ).toString()
+
+      const killUrl =
+        queryString.length > 0
+          ? `${baseUrl}/kill-events/params?${queryString}`
+          : `${baseUrl}/kill-events`
+
+      const playerUrl =
+        queryString.length > 0
+          ? `${baseUrl}/player-events/params?${queryString}`
+          : `${baseUrl}/player-events`
 
       const [killResponse, playerResponse] = await Promise.all([
-        fetch(`${baseUrl}/kill-events`),
-        fetch(`${baseUrl}/player-events`),
+        fetch(killUrl),
+        fetch(playerUrl),
       ])
 
       if (!killResponse.ok) throw new Error("Failed to fetch kill events")
@@ -111,7 +150,6 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
         const wr = (e: any) => e.weapon_reserve ?? e.WeaponReserve ?? e.weapon?.weapon_reserve ?? 0
         const ws = (e: any) => e.weapon_skin ?? e.WeaponSkin ?? e.weapon?.weapon_skin ?? ""
         const wh = (e: any) => e.weapon_headshot ?? e.WeaponHeadshot ?? e.weapon?.weapon_headshot ?? false
-
         const ts = (e: any) =>
           e.timestamp ?? e.Timestamp ?? e.event_timestamp ?? e.EventTS
 
@@ -159,8 +197,8 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
         }))
       }
 
-      setKillEvents(killData)
-      setPlayerEvents(playerData)
+      setKillEvents(Array.isArray(killData) && killData.length > 0 ? killData : [])
+      setPlayerEvents(Array.isArray(playerData) && playerData.length > 0 ? playerData : [])
 
       setLastUpdate(new Date())
       setError(null)
@@ -180,9 +218,21 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [pollInterval, dataSource])
+  }, [pollInterval, dataSource, filters])
 
   const calculateStats = () => {
+    if (killEvents.length === 0 && playerEvents.length === 0) {
+      return {
+        totalKills: 0,
+        headshotPercentage: "0",
+        roundCount: 0,
+        killsPerRound: "0.0",
+        currentMoney: 0,
+        currentHealth: 100,
+        kdr: "0.00",
+      }
+    }
+
     const totalKills = killEvents.length
     const headshotKills = killEvents.filter((e) => e.active_gun.headshot).length
     const headshotPercentage = totalKills > 0 ? ((headshotKills / totalKills) * 100).toFixed(1) : "0"
@@ -192,7 +242,9 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
 
     const latestPlayerEvent =
       playerEvents.length > 0
-        ? playerEvents.reduce((latest, current) => (current.timestamp > latest.timestamp ? current : latest))
+        ? playerEvents.reduce((latest, current) =>
+            current.timestamp > latest.timestamp ? current : latest
+          )
         : null
 
     return {
@@ -202,7 +254,9 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
       killsPerRound: (totalKills / roundCount).toFixed(1),
       currentMoney: latestPlayerEvent?.money || 0,
       currentHealth: latestPlayerEvent?.health || 100,
-      kdr: latestPlayerEvent ? (latestPlayerEvent.kills / Math.max(latestPlayerEvent.deaths, 1)).toFixed(2) : "0.00",
+      kdr: latestPlayerEvent
+        ? (latestPlayerEvent.kills / Math.max(latestPlayerEvent.deaths, 1)).toFixed(2)
+        : "0.00",
     }
   }
 
@@ -365,6 +419,44 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
 
   return (
     <div className="grid gap-6">
+      <Card className="bg-gray-900 border-gray-700">
+        <CardContent className="flex flex-wrap gap-2 py-4">
+          <input
+            name="match_id"
+            value={filters.match_id}
+            onChange={handleChange}
+            placeholder="Match ID"
+            className="px-2 py-1 rounded bg-gray-800 text-white text-sm"
+          />
+          <input
+            name="round"
+            value={filters.round}
+            onChange={handleChange}
+            placeholder="Round"
+            className="px-2 py-1 rounded bg-gray-800 text-white text-sm"
+          />
+          <input
+            name="weapon_name"
+            value={filters.weapon_name}
+            onChange={handleChange}
+            placeholder="Weapon"
+            className="px-2 py-1 rounded bg-gray-800 text-white text-sm"
+          />
+          <input
+            name="headshot"
+            value={filters.headshot}
+            onChange={handleChange}
+            placeholder="Headshot (true/false)"
+            className="px-2 py-1 rounded bg-gray-800 text-white text-sm"
+          />
+          <button
+            onClick={() => fetchData(true)}
+            className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded text-sm"
+          >
+            <Search className="h-4 w-4" /> Search
+          </button>
+        </CardContent>
+      </Card>
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${isRefreshing ? "bg-yellow-400 animate-pulse" : "bg-green-400"}`} />
@@ -372,7 +464,7 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
             Auto-refresh every {pollInterval / 1000}s • Last update: {lastUpdate.toLocaleTimeString()}
           </span>
         </div>
-        {error && <span className="text-xs text-red-400">Connection issue - retrying...</span>}
+        {error && <span className="text-xs text-red-400">No events found... Try a different query</span>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -667,6 +759,68 @@ export function AnalyticsCharts({ dataSource, pollInterval = 2000 }: AnalyticsCh
             ) : (
               <div className="text-center text-gray-400 py-4">No recent kills</div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gray-900 border-gray-700">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Activity className="h-5 w-5" />
+            Event Viewer
+          </CardTitle>
+          <CardDescription className="text-gray-400">
+            Showing {killEvents.length} kill events and {playerEvents.length} player events
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[400px] overflow-y-auto">
+            {/* Kill Events */}
+            <div>
+              <h4 className="text-white font-semibold mb-2">Kill Events</h4>
+              {killEvents.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {killEvents.map((e, i) => (
+                    <li key={i} className="p-2 rounded bg-gray-800 flex justify-between">
+                      <span className="text-white">
+                        [{e.round}] {e.name} ({e.team}) → {e.active_gun.name}{" "}
+                        {e.active_gun.headshot && (
+                          <Badge variant="outline" className="text-xs border-red-400 text-red-400 ml-1">
+                            HS
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="text-gray-400 text-xs">
+                        {new Date(e.timestamp).toLocaleTimeString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-400 text-sm">No kill events found</p>
+              )}
+            </div>
+
+            {/* Player Events */}
+            <div>
+              <h4 className="text-white font-semibold mb-2">Player Events</h4>
+              {playerEvents.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {playerEvents.map((e, i) => (
+                    <li key={i} className="p-2 rounded bg-gray-800 flex justify-between">
+                      <span className="text-white">
+                        [{e.round}] {e.name} ({e.team}) • HP:{e.health} • ${e.money}
+                      </span>
+                      <span className="text-gray-400 text-xs">
+                        {new Date(e.timestamp).toLocaleTimeString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-400 text-sm">No player events found</p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

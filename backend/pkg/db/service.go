@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
+	"strings"
 
 	"github.com/ukpabik/CSYou/pkg/api/model"
 	"github.com/ukpabik/CSYou/pkg/shared"
@@ -13,6 +15,86 @@ const (
 	playerEventTableName = "cs2_player_events"
 )
 
+// GetPlayerEventsByParams retrieves all player events for given params.
+func GetPlayerEventsByParams(config model.ClickHouseEventQueryConfig) ([]model.ClickHousePlayerEvent, error) {
+	if ClickHouseClient == nil {
+		return nil, fmt.Errorf("clickhouse client is not initialized")
+	}
+
+	ctx := context.Background()
+	var events []model.ClickHousePlayerEvent
+
+	query := fmt.Sprintf("SELECT * FROM %s", playerEventTableName)
+
+	var conditions []string
+	fields := []fmt.Stringer{
+		config.MatchID,
+		config.Round,
+	}
+
+	for _, f := range fields {
+		if s := f.String(); s != "" {
+			conditions = append(conditions, s)
+		}
+	}
+
+	// Append WHERE clause
+	if len(conditions) > 0 {
+		query = fmt.Sprintf("%s WHERE %s", query, strings.Join(conditions, " AND "))
+	}
+
+	// Execute query
+	err := ClickHouseClient.Select(ctx, &events, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute clickhouse query: %v", err)
+	}
+
+	return events, nil
+}
+
+func GetKillEventsByParams(config model.ClickHouseKillEventQueryConfig) ([]model.ClickHouseKillEvent, error) {
+	if ClickHouseClient == nil {
+		return nil, fmt.Errorf("clickhouse client is not initialized")
+	}
+
+	ctx := context.Background()
+	var events []model.ClickHouseKillEvent
+
+	// Base query
+	query := fmt.Sprintf("SELECT * FROM %s", killEventTableName)
+
+	var conditions []string
+	fields := []fmt.Stringer{
+		config.Round,
+		config.MatchID,
+		config.WeaponName,
+		config.WeaponHeadshot,
+	}
+
+	for _, f := range fields {
+		if s := f.String(); s != "" {
+			conditions = append(conditions, s)
+		}
+	}
+
+	// Append WHERE clause
+	if len(conditions) > 0 {
+		query = fmt.Sprintf("%s WHERE %s", query, strings.Join(conditions, " AND "))
+	}
+
+	log.Printf("QUERY: %s", query)
+
+	// Execute query
+	err := ClickHouseClient.Select(ctx, &events, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute clickhouse query: %v", err)
+	}
+	log.Printf("EVENTS: %v", events)
+
+	return events, nil
+}
+
+// GetAllKillEvents retrieves all kill events across all matches from ClickHouse.
 func GetAllKillEvents() ([]model.ClickHouseKillEvent, error) {
 	if ClickHouseClient == nil {
 		return nil, fmt.Errorf("clickhouse client is not initialized")
@@ -30,6 +112,7 @@ func GetAllKillEvents() ([]model.ClickHouseKillEvent, error) {
 	return events, nil
 }
 
+// GetAllPlayerEvents retrieves all player events across all matches from ClickHouse.
 func GetAllPlayerEvents() ([]model.ClickHousePlayerEvent, error) {
 	if ClickHouseClient == nil {
 		return nil, fmt.Errorf("clickhouse client is not initialized")
